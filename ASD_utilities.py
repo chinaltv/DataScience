@@ -18,6 +18,7 @@ def read_one(InputPaths):
         dict = json.loads(line)
         content.append(dict)
     df = pd.DataFrame(content)
+    raw.close()
     return df
 
 
