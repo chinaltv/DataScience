@@ -5,7 +5,9 @@ Y_train = [0,1,1] # 假数据
 
 # KNN
 from sklearn.neighbors import KNeighborsClassifier
-knn = KNeighborsClassifier(n_neighbors= k)
+knn = KNeighborsClassifier(algorithm = "auto", leaf_size = k, metric = "minkowski", metric_params = None, n_jobs = k, n_neighbors= k, p = k, weight = 'uniform')
 knn.fit(X_train, Y_train)
+y_pred = knn.predict()
 
-# KNN调参
+
+from sklearn.ensemble import RandomForestClassifier
