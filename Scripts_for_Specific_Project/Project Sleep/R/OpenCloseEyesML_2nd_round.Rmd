@@ -1,0 +1,175 @@
+---
+title: "OpenCloseEyesML_2nd_round"
+author: "Xi Chen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# clear, basic setting and set work directory ----
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'E:/SDODT Co., Ltd/Sleep issues/data/openclose_selfmotivated/variable_choose/')
+## change to setwd() if you need to run it in your own console
+options(scipen = 2000)
+
+
+# package installation ----
+packages = c("car", "tidyverse", "readxl", "hash", "caret", "randomForest", "ranger", "kernlab", "psych", "arrow")
+## collections is only for dictionary type support
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())), 
+                   repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN/")
+}
+invisible(lapply(packages, library, character.only = TRUE))
+```
+
+```{r import data and set train data}
+rm(list = ls())
+df_raw <- read.table("./data_cleaned.txt", header = FALSE, sep = ",", dec = ".") %>%
+  rename(par_no = V60, act = V61, pos = V62, V01 = V1, V02 = V2, V03 = V3, V04 = V4, V05 = V5, V06 = V6, V07 = V7, V08 = V8, V09 = V9)
+df_raw$act[df_raw$act == 2] <- 0
+df_raw$act[df_raw$act == 3] <- 1
+# 2睁眼，3闭眼
+p_info <- read_excel("./睁闭眼被试信息表.xlsx")
+df <- inner_join(df_raw, p_info, by = 'par_no')
+head(df)
+
+# set train and test group ----
+library(caret)
+# split <- createDataPartition(y=df$par_no, p = 0.75, list = FALSE)
+# %>% select(-c(par_no, pos, sex, age))
+# %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12, act))
+df$act <- as.factor(df$act)
+
+df_train <- df[1:11171,] %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12, act))
+df_test <- df[11172:15194,] %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12, act))
+
+act_train <- df_train$act
+act_test <- df_test$act
+
+df_train <- df_train %>% select(-act)
+df_test <- df_test %>% select(-act)
+
+df_train_std <- preProcess(df_train, method = c("center", "scale")) %>% predict(df_train)
+df_test_std <- preProcess(df_test, method = c("center", "scale")) %>% predict(df_test)
+
+df_train72 <- df %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12))
+act_train72 <- df$act
+
+# 72
+library(arrow)
+df_test72 <- arrow::read_feather("E:\\SDODT Co., Ltd\\Sleep issues\\data\\openclose_selfmotivated\\variable_choose\\test_data_2.feather") %>% rename(par_no = "59", act = "60", pos = "61", "01" = "1", "02" = "2", "03" = "3", "04" = "4", "05" = "5", "06" = "6", "07" = "7", "08" = "8", "09" = "9", "00" = "0")
+df_test72$act[df_test72$act == 2] <- 0
+df_test72$act[df_test72$act == 3] <- 1
+df_test72$par_no <- as.double(df_test72$par_no)
+df_test72$act <- as.factor(df_test72$act)
+# 2睁眼，3闭眼
+df_test72 <- inner_join(df_test72, p_info, by = 'par_no')
+df_test72 <- df_test72 %>% select(c("01", "20", "21", "15", "19", "25", "17", "22", "18", "26", "13", "24", "27", "10", "23", "14", "08", "16", "12", "03", "07", "05", "09", "02", "58", "11", act)) %>% rename("V02" = "01", "V21" = "20", "V22" = "21", "V16" = "15", "V20" = "19", "V26" = "25", "V18" = "17", "V23" = "22", "V19" = "18", "V27" = "26", "V14" = "13", "V25" = "24", "V28" = "27", "V11" = "10", "V24" = "23", "V15" = "14", "V09" = "08", "V17" = "16", "V13" = "12", "V04" = "03", "V08" = "07", "V06" = "05", "V10" = "09", "V03" = "02", "V59" = "58", "V12" = "11")
+
+act_test72 <- df_test72$act
+df_test72 <- df_test72 %>% select(-act)
+
+
+# resampling
+train_control <- trainControl(
+  method = "repeatedcv",
+  number = 5,
+  repeats = 5,
+  savePredictions = "final" # best prediction
+)
+set.seed(56)
+```
+
+```{r random forest reset1 自预测，randomF包}
+library(randomForest)
+set.seed(56)
+
+mdl_MLranf <- randomForest::randomForest(
+  x = df_train72,
+  y = act_train72,
+)
+
+pr_MLranf <- postResample(pred = predict(mdl_MLranf, newdata = df_test72), obs = act_test_72)
+pr_MLranf
+```
+
+```{r random forest reset2 caret包}
+library(caret)
+set.seed(56)
+
+mdl_MLranf2 <- train(
+  x = df_train72,
+  y = act_train72,
+  method = "ranger",
+  max.depth = sqrt(49),
+  trControl = train_control
+)
+
+pr_MLranf2 <- postResample(pred = predict(mdl_MLranf2, newdata = df_test72), obs = act_test72)
+pr_MLranf2
+```
+
+```{r random forest reset3 单人自预测}
+library(caret)
+set.seed(56)
+
+df_train1 <- df_train72[1:224,]
+df_test1 <- df_test72[1:40,]
+act_train1 <- act_train72[1:224]
+act_test1 <- act_test72[1:40]
+
+mdl_MLranf3 <- train(
+  x = df_train1,
+  y = act_train1,
+  method = "rf",
+  max.depth = sqrt(49),
+  trControl = train_control
+)
+
+pr_MLranf3 <- postResample(pred = predict(mdl_MLranf3, newdata = df_test1), obs = act_test1)
+pr_MLranf3
+```
+
+```{r net}
+library(caret)
+library(nnet)
+set.seed(56)
+df_test_std <- df_test_std %>% mutate(act = act_test) %>% as.tibble()
+df_train_std <- df_train_std %>% mutate(act = act_train) %>% as.tibble()
+mdl_DLnet <- nnet:nnet(
+  df_train_std$act ~ df_train_std$V02 + df_train_std$V21,
+  data = df_train_std,
+  size = 2
+)
+
+pr_DLnet <- postResample(pred = predict(mdl_DLnet, newdata = df_train_std), obs = df_train_std$act)
+pr_DLnet
+```
+
+不能简单用caret包跑，会出一大堆报错
+
+
+```{r export data}
+setwd('E:/SDODT Co., Ltd/Sleep issues/data/openclose_selfmotivated/df_for_python/')
+write_feather(df_train, "./df_train.feather", version = 1)
+write_feather(df_test, "./df_test.feather", version = 1)
+write_feather(df_train72, "./df_train72.feather", version = 1)
+write_feather(df_test72, "./df_test72.feather", version = 1)
+write_feather(df_train_std, "./df_train_std.feather", version = 1)
+write_feather(df_test_std, "./df_test_std.feather", version = 1)
+```
+
+
+```{r}
+setwd('E:/SDODT Co., Ltd/Sleep issues/data/openclose_selfmotivated/df_for_python/')
+act_test <- act_test %>% as.data.frame()
+act_test72 <- act_test72 %>% as.data.frame()
+act_train <- act_train %>% as.data.frame()
+act_train72 <- act_train72 %>% as.data.frame()
+write_feather(act_train, "./act_train.feather", version = 1)
+write_feather(act_train72, "./act_train72.feather", version = 1)
+write_feather(act_test, "./act_test.feather", version = 1)
+write_feather(act_test72, "./act_test72.feather", version = 1)
+```

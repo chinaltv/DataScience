@@ -1,0 +1,35 @@
+---
+title: "Music Scale Data Analysis"
+author: "Xi Chen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'E:/SDODT Co., Ltd/Sleep issues/data/Music Scale')
+# rm(list = ls())
+packages = c("tidyverse", "openxlsx", "readxl", "writexl", "psych", "sirt")
+## collections is only for dictionary type support
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())), 
+                   repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN/")
+}
+invisible(lapply(packages, library, character.only = TRUE))
+```
+
+```{r qu corre}
+data <- openxlsx::read.xlsx("./dataframe.xlsx")
+data <- data %>% select(-c("题目向量"))
+correlation <- psych::tetrachoric(data)
+corr_matrix <- correlation$rho
+```
+
+```{r}
+corr_matrix <- data.frame(corr_matrix)
+openxlsx::write.xlsx(x = corr_matrix, file = "./correlation.xlsx", rowNames = TRUE, colNames = TRUE)
+```
+
+```{r}
+writexl::write_xlsx(corr_matrix, './correlation2.xlsx', col_names = TRUE)
+```

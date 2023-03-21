@@ -1,0 +1,6 @@
+library(tidyr)
+longformat <- read.csv("路径", header = TRUE)
+wideformat <- spread(longformat, key = variable1, value = score1)
+## tidyr::pivot_longer()
+## tidyr::pivot_wider()
+write.csv(wideformat, "路径")

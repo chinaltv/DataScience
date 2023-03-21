@@ -1,0 +1,79 @@
+---
+title: "Text analysis study code"
+author: "Xi Chen"
+date: "2022/2/9"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Tidy data
+
+**1. 对来自多篇文档的数据进行复合并整理。源数据格式应为unnest_tokens()后的单一格式**
+
+```
+> library(tidyr)
+> frequency \<- bind_rows(mutate(tidy_bronte, author = "Brontë Sisters"),
+> mutate(tidy_hgwells, author = "H.G. Wells"),
+> mutate(tidy_books, author = "Jane Austen")) %>%
+> mutate(word = str_extract(word, "\[a-z'\]+")) %>%
+> count(author, word) %>%
+> group_by(author) %>%
+> mutate(proportion = n / sum(n)) %>%
+> select(-n) %>%
+> pivot_wider(names_from = author, values_from = proportion) %>%
+> pivot_longer(`Brontë Sisters`:`H.G. Wells`,
+> names_to = "author", values_to = "proportion")
+
+> frequency
+> #> # A tibble: 57,820 × 4
+> #> word `Jane Austen` author proportion
+> #> <chr> <dbl> <chr> <dbl>
+> #> 1 a 0.00000919 Brontë Sisters 0.0000319
+> #> 2 a 0.00000919 H.G. Wells 0.0000150
+> #> 3 a'most NA Brontë Sisters 0.0000159
+> #> 4 a'most NA H.G. Wells NA
+> #> 5 aback NA Brontë Sisters 0.00000398
+> #> 6 aback NA H.G. Wells 0.0000150
+> #> 7 abaht NA Brontë Sisters 0.00000398
+> #> 8 abaht NA H.G. Wells NA
+> #> 9 abandon NA Brontë Sisters 0.0000319
+> #> 10 abandon NA H.G. Wells 0.0000150
+> #> # ... with 57,810 more rows
+```
+
+**2. 词频图绘制示例代码**
+
+```
+library(scales)  
+# expect a warning about rows with missing values being removed  
+ggplot(frequency, aes(x = proportion, y = `Jane Austen`,  
+color = abs(`Jane Austen` - proportion))) +  
+geom_abline(color = "gray40", lty = 2) +  
+geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +  
+geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +  
+scale_x_log10(labels = percent_format()) +  
+scale_y_log10(labels = percent_format()) +  
+scale_color_gradient(limits = c(0, 0.001),  
+low = "darkslategray4", high = "gray75") +  
+facet_wrap(~author, ncol = 2) +  
+theme(legend.position="none") +  
+labs(y = "Jane Austen", x = NULL) 
+```
+
+**3.对于具有1.frequency数据框架内的数据，可以直接进行相关分析。可以整理成宽格式，也可以整理成长格式。此时每个词汇是一个可观测者（样本），不同的作者是两个可比较变量。**  
+
+```
+cor.test(data = frequency[frequency$author == "H.G. Wells",],  
+~ proportion + `Jane Austen`)  
+```
+---
+
+# Sentiment analysis
+
+**4.**

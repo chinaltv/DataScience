@@ -1,0 +1,224 @@
+---
+title: "0ZI5H_R2"
+author: "Xi Chen"
+date: "2022/5/28"
+output:
+  html_document:
+  df_print: paged
+---
+
+```{r setup, include=FALSE}
+# None
+```
+## Forewords
+
+This is an R script/statistical report for conducting data analysis in the project Multi100.
+
+This is the second analysis round of Citation: Wilde, M. J., Geraty, K., Nelson, S. L., & Bowman, E. A. (2010). Religious economy or organizational field? Predicting bishops’ votes at the Second Vatican Council. American Sociological Review, 75(4), 586-606. doi: 10.1177/0003122410368927.
+
+The claim is same as the first round: These characteristics [other crucial characteristics of the social environment within which leaders operate], which we derive from Neo-Institutional Theory (NIT) ... lead them [leaders] to prioritize concerns about their institutions’ legitimacy over the concerns about efficiency ... (p. 586.). However, the second analysis should produce a single, main result in terms of statistical families of z-, t-, F-, or χ² tests (or their alternative or non-parametric versions).
+
+There is an extra analysis description: You should interpret concerns about their institutions’ legitimacy as ecumenical concerns in your analysis. You should interpret these concerns as embedded in a field structurated by Protestants. You should include Neo-Institutional Variables as well as Religious Competition Variables in your analysis. You should take note of how stability interacts with religious freedom and how it interacts with another established religion in your analysis.
+
+See https://osf.io/7snkz/ if you need more information about Multi100.
+
+
+## Package  
+```{r Dependency, message=FALSE, error=FALSE, warning=FALSE}
+library(readxl)    # import
+library(tidyverse) # data preprocessing
+library(lmtest)    # re-calculate coefficient table
+library(sandwich)  # calculate robust standard error
+library(MASS)      # ordered/ordinal regression
+library(lme4)      # only for BIC
+library(tibble)    # comparing two coefficient manually
+```
+
+## Data pre-processing
+
+According to the task description, different from what I did in task 1, I need to consider concerns about institutions’ legitimacy as ecumenical concerns (embedded in a field structurated by Protestants), namely the structuration (NSTRUCTU). Therefore, the structuration should be considered the only NIT variable. Field stability (NPCCHANG) should be an interactive variable with country religion variable (Religious freedom, NRELREG2; state religion is not RCC, NRELREG4). In other words, their purpose in this analysis would be to participate in group-wise regression to discuss the situation of stability among different countries in groups. The market share would be the only RCT variable. On this basis, the country religion is actually a grouping moderator in the analysis. In addition, according to some results of analysis 1, some original variables will be included.  
+
+For the reason above, different from task1, the variable list should be as close as the original paper but with some small changes:  
+
+DV:  
+**IREVELA0** (**Vote on revelation** - progressive/conservative);  
+**IFRSTBV0** (**Vote on first BVM** - progressive/conservative);  
+**IDV4CAT** (**Progressive** - ordinal manifest variable of C/P trait);  
+
+NIT variables:  
+**NSTRUCTU** (**Structuration**, the core of NIT);  
+**NPCCHANG** (**Field Stability**, Change in percent Catholic);  
+**NINCUMBE** (**Incumbency**);  
+
+RCT variables:  
+**NPERCATH** (**Market Share**, Percent Catholic - 1965, the core of RCT);  
+**NRELREG2** (**Country attribute** - dummy: Religious freedom, *RCC is state religion* as baseline);  
+**NRELREG4** (**Country attribute** - dummy: State religion is not RCC);  
+
+However, I see **Country attribute** as the between-group moderator. That is, the dummy variables are not longer as the variables for RCT variables but for the construction of moderator. Its result would be the same as the group-wise regression with transformed **Religious regulation (three categories) - 1955**.  
+
+Normal interaction:  
+**NRELREG4 * NSTRUCTU**, **NRELREG2 * NSTRUCTU**, **NRELREG4 * NPERCATH**, **NRELREG2 * NPERCATH** (if we need group discussion);  
+**XINCUMST** (Interaction between incumbency and stability);  
+**XSTRUCST** (Interaction between structuration and stability);  
+**XINCUMS0** (Interaction between incumbency and structuration);  
+
+Moreover, we would have special interaction according to the analysis description that:  
+**NRELREG4 * NPCCHANG** (how stability interacts with religious freedom);  
+**NRELREG2 * NPCCHANG** (how stability interacts with another established religion);  
+
+Considering that our purpose is to compare coefficient values, only the coefficients of **NSTRUCTU** and **NPERCATH** will be compared in the same regression equation. National religion will be used as moderator later for group-wise regression; field stability will be used as the normal NIT variable. According to different DVs, we will first build some regression equations containing all variables to prove/reject our claim.
+
+In addition, same as the first round analysis:  
+According to the paper's literature review, protestants concern the Mary issue more than the Revelation issue. This prior assumption gave us information that they (bishops) would be more sensitive on progress to the Mary issues. Therefore, for the same bishop with same progressive trait, the positive vote possibility of the "Mary issue" would be higher than the "Revelation issue". This conclusion implies that there is a rank in the voting behaviour since "conservative/progressive" is a latent trait. And we would make a bold assumption that variable **IDV4CAT** (Voting pattern on first BVM and revelation - four category) is an ordinal manifest variable measuring the "conservative/progressive" trait.
+
+Due to the lack of relevant information, the pattern of missing data is assumed to be **MCAR**. Considering the sample size of this dataset is enough large to ensure the power and there is no a priori assumptions about the distribution of IVs, I would use *listwise deletion* instead of any imputation or pairwise deletion.  
+
+```{r pre-processing}
+df <- read_excel("H://I.R//Project：Multi100//data//Second Vatican Council Votes.xlsx")
+MulCol <- data.frame(df$IREVELA0, df$IFRSTBV0, df$NPERCATH, df$NRELREG2, df$NRELREG4, df$NSTRUCTU, df$NPCCHANG, df$NINCUMBE)
+cor(MulCol, use = 'na.or.complete') # Multicollinearity check
+options(scipen = 200) # set result precision
+df <- rename(df, CaseID = 'CaseID$') # rename variable for some symbol
+# We considered **IDV4CAT** is an ordinal manifest variable measuring the "conservative/progressive" trait. However, we need to reorder its encoding, higher means more progressive
+table(df$IDV4CAT)
+df <- df %>% mutate(IDV4CATre = c(1,3,2,4)[df$IDV4CAT + 1])
+table(df$IDV4CATre)
+```
+
+## Prioritize concerns about their institutions’ legitimacy over the concerns about efficiency  
+### Sources of Revelation/Overall: 
+
+```{r overall Rev. claim}
+ModRevAll <- glm(
+  IREVELA0 ~ NPERCATH + NRELREG2 + NRELREG4 + NSTRUCTU + NPCCHANG + NINCUMBE + 
+    XINCUMST + XSTRUCST + XINCUMS0 + NRELREG4:NPCCHANG + NRELREG2:NPCCHANG,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+RobSERev <- ModRevAll %>%  # calculate robust standard error for dealing with heteroscedasticity
+  coeftest(vcov. = ModRevAll %>%
+             vcovHC(type = 'HC1'))
+BICRevAll <- BIC(RobSERev) 
+RobSERev # checking result
+BICRevAll # Just for check BIC
+exp(RobSERev) # Check odds ratio
+bs1 <- abs(RobSERev[c(2,5)]) # extract coefficient matrix, NPERCATH and NSTRUCTU only
+v1 <- vcov(ModRevAll)[c(2,5),c(2,5)] # extract variance-covariance matrix, NPERCATH and NSTRUCTU only
+
+tibble::tibble(
+  diff_estim = diff(bs1),
+  diff_SE = sqrt(v1[1, 1] + v1[2, 2] - 2 * v1[1, 2]),
+  t_stat = diff_estim / diff_SE,
+  df = df.residual(ModRevAll),
+  p_value = 2 * pt(abs(t_stat), df = df, lower.tail = FALSE)
+)
+```
+
+We could see in this Revelation model, the SE-adjusted coefficient showed bishops who live in a higher market share country would significantly have a higher possibility to progressive vote on revelation issue (odd ratio: approximately 100%) while possibly living in a higher structuration country only contribute 9.79%. We did a t-test to compare these two coefficients manually and the result positively support that a low possibility to accept H0 "these two coefficient are the same" in the NHST framework (t = 3.81, p = 0.000144 << 0.005). Considering the odds ratios, I would reject the original claim in Revelation Model*"These characteristics [other crucial characteristics of the social environment within which leaders operate], which we derive from Neo-Institutional Theory (NIT) ... lead them [leaders] to prioritize concerns about their institutions’ legitimacy over the concerns about efficiency ... (p. 586.)."*.  
+
+### Blessed Virgin Mary(BVM)/Overall: 
+
+```{r overall BVM claim}
+ModBVMAll <- glm(
+  IFRSTBV0 ~ NPERCATH + NRELREG2 + NRELREG4 + NSTRUCTU + NPCCHANG + NINCUMBE + 
+    XINCUMST + XSTRUCST + XINCUMS0 + NRELREG4:NPCCHANG + NRELREG2:NPCCHANG,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+RobSEBVM <- ModBVMAll %>%  # calculate robust standard error for dealing with heteroscedasticity
+  coeftest(vcov. = ModBVMAll %>%
+             vcovHC(type = 'HC1'))
+BICBVMAll <- BIC(RobSEBVM) 
+RobSEBVM # checking result
+BICBVMAll # Just for check BIC
+exp(RobSEBVM) # Check odds ratio
+bs2 <- abs(RobSEBVM[c(2,5)]) # extract coefficient matrix, NPERCATH and NSTRUCTU only
+v2 <- vcov(ModBVMAll)[c(2,5),c(2,5)] # extract variance-covariance matrix, NPERCATH and NSTRUCTU only
+
+tibble::tibble(
+  diff_estim = diff(bs2),
+  diff_SE = sqrt(v2[1, 1] + v2[2, 2] - 2 * v2[1, 2]),
+  t_stat = diff_estim / diff_SE,
+  df = df.residual(ModRevAll),
+  p_value = 2 * pt(abs(t_stat), df = df, lower.tail = FALSE)
+)
+```
+
+
+The BVM Model also suggests the same result (t = 2.90, p = 0.00381 < 0.05). 
+
+### How about overall?
+
+```{r overall Ord. claim}
+OrdModelAll <- polr(
+  as.factor(IDV4CAT) ~ NPERCATH + NRELREG2 + NRELREG4 + NSTRUCTU + NPCCHANG + NINCUMBE + 
+    XINCUMST + XSTRUCST + XINCUMS0 + NRELREG4:NPCCHANG + NRELREG2:NPCCHANG,
+  data = df,
+  Hess = TRUE,
+  na.action = na.omit)
+RobStdErrOM <- OrdModelAll %>%
+  coeftest(vcov. = OrdModelAll %>%
+             vcovCL(cluster = df$CaseID, type = 'HC1'))
+OrdModelAll
+RobStdErrOM
+exp(RobStdErrOM) # Check odd ratio
+bs3 <- abs(RobStdErrOM[c(1,4)])
+v3 <- vcov(OrdModelAll)[c(1,4),c(1,4)]
+tibble::tibble(
+  diff_estim = diff(bs3),
+  diff_SE = sqrt(v3[1, 1] + v3[2, 2] - 2 * v3[1, 2]),
+  t_stat = diff_estim / diff_SE,
+  df = df.residual(OrdModelAll),
+  p_value = 2 * pt(abs(t_stat), df = df, lower.tail = FALSE)
+)
+```
+
+The overall ordinal model also supports this result (t = 4.12, p = 0.0000403 << 0.05).
+
+
+## Group-wise analysis
+
+I consider the overall model have already prove the claim. However, the analysis description asked me to notice how stability interact with group variable. So, based on two logistic model, we would conduct some group-wise analysis.
+
+### Sources of Revelation & Blessed Virgin Mary(BVM)/Group-wise:
+
+```{r Rev. Group-wise extra analysis}
+ModRevInt <- glm(
+  IREVELA0 ~ NPERCATH + NRELREG2 + NRELREG4 + NSTRUCTU + NPCCHANG + NINCUMBE + 
+    XINCUMST + XSTRUCST + XINCUMS0 + NRELREG4:NPCCHANG + NRELREG2:NPCCHANG + 
+    NRELREG4:NPERCATH + NRELREG2:NPERCATH + NRELREG4:NSTRUCTU + NRELREG2:NSTRUCTU,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+RobSERevInt <- ModRevInt %>%
+  coeftest(vcov. = ModRevInt %>%
+             vcovHC(type = 'HC1'))
+BICRevInt <- BIC(RobSERevInt) 
+RobSERevInt
+BICRevInt
+exp(RobSERevInt)
+```
+```{r BVM Group-wise extra analysis}
+ModBVMInt <- glm(
+  IFRSTBV0 ~ NPERCATH + NRELREG2 + NRELREG4 + NSTRUCTU + NPCCHANG + NINCUMBE + 
+    XINCUMST + XSTRUCST + XINCUMS0 + NRELREG4:NPCCHANG + NRELREG2:NPCCHANG + 
+    NRELREG4:NPERCATH + NRELREG2:NPERCATH + NRELREG4:NSTRUCTU + NRELREG2:NSTRUCTU,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+RobSEBVMInt <- ModBVMInt %>%
+  coeftest(vcov. = ModBVMInt %>%
+             vcovHC(type = 'HC1'))
+BICBVMInt <- BIC(RobSEBVMInt) 
+RobSEBVMInt
+BICBVMInt
+exp(RobSEBVMInt)
+```
+
+*Same as the first round, NRELREG2:NSTRUCTU is missing. I would ignore it and admit that is because of my lack of ability.*  
+The analysis result suggests in the Rev. issue, the intercept of voting behavior possibility of bishops who live in a competitive or hostile religion environment is significant to the baseline group (national religion is RCC). (please forgive me for using such a direct inference) In other words, living in a competitive or hostile religion environment would make bishops would have a lower willingness to vote (-12.706252%, -12.444885%). However, their increasing/decreasing trends/slopes are not significant (z = -0.720 ~ 0.423, p = 0.471 ~ 0.966) in both model. So, we could not consider country religion as a general moderator in this analysis but only in the Rev. issue.
+
+## Conclusion
+
+### Claim: Not Proved.

@@ -1,0 +1,311 @@
+---
+title: "Machine Learning close_open_eyes_task in without considering statistical approach"
+author: "Xi Chen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# clear, basic setting and set work directory ----
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'E:/SDODT Co., Ltd/Sleep issues/data/openclose_selfmotivated/variable_choose/')
+## change to setwd() if you need to run it in your own console
+options(scipen = 2000)
+
+
+# package installation ----
+packages = c("car", "tidyverse", "readxl", "hash", "caret", "randomForest", "ranger", "kernlab", "psych", "arrow")
+## collections is only for dictionary type support
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())), 
+                   repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN/")
+}
+invisible(lapply(packages, library, character.only = TRUE))
+```
+
+## t检验分析报告
+
+该分析目的是为睁闭眼数据进行变量选择，并报告相应的结果。  
+
+对数据进行预处理，集合成大的dataframe。只取前六行展示。  
+
+```{r import data}
+df_raw <- read.table("./data_cleaned.txt", header = FALSE, sep = ",", dec = ".") %>%
+  rename(par_no = V60, act = V61, pos = V62, V01 = V1, V02 = V2, V03 = V3, V04 = V4, V05 = V5, V06 = V6, V07 = V7, V08 = V8, V09 = V9)
+df_raw$act[df_raw$act == 2] <- 0
+df_raw$act[df_raw$act == 3] <- 1
+# 2睁眼，3闭眼
+p_info <- read_excel("./睁闭眼被试信息表.xlsx")
+df <- inner_join(df_raw, p_info, by = 'par_no')
+head(df)
+```
+
+创建字典和列表并将p值输入进去。顺便写了个判断es的。
+
+```{r t-test}
+features_name <- names(df)[1:(ncol(df)-5)]
+pval <- c()
+esval <- c()
+dict <- hash()
+dict_es <- hash()
+pdict <-  
+for(features in features_name){
+  p = t.test(df[,features] ~ df$act)$p.value
+  es = t.test(df[,features] ~ df$act)$statistic*sqrt(1/7317+1/7877)
+  pval = c(pval,p)
+  esval = c(esval,es)
+  dict[[features]] <- p
+  dict_es[[features]] <- es
+}
+sprintf('%0.4f', pval)
+print(dict_es)
+```
+
+做一下线性的判断，随便拿个es最高的变量看一看。
+
+```{r linear judgement}
+ggplot(df, aes(x = V02, y = act)) + 
+  geom_point()
+ggplot(df, aes(x = V02)) +
+  geom_histogram(fill = "lightblue", colour = "black")
+```
+
+由于高度共线性，KMO和bartlett test实际上没有太大意义。在此选用PCA（而不是FA）完成后续的工作。计算因子得分。
+
+```{r dimension reduction, PCA}
+# Boring but routine pre-test
+df_dr <- df[1:59]
+fea_cor <- cor(df_dr)
+psych::KMO(df_dr)
+bartlett.test(df_dr)
+
+# routine Scree
+scree(df_dr)
+PCA_result <- psych::principal(df_dr, nfactors = 6, rotate = "varimax", scores = TRUE)
+df_scores <- as.data.frame(PCA_result$scores)
+df_scores <- df_scores %>% mutate(act = df$act)
+# df_scores$act <- as.factor(df_scores$act)
+# df_scores <- df_scores %>% mutate(par_no = df$par_no, pos = df$pos, pos = df$pos, age = df$age) 
+# df_regul_train <- df_scores[1:11171,]
+# df_regul_test <- df_scores[11172:15194,]
+```
+
+# 机器学习
+
+```{r basic setting for ML}
+# set train and test group ----
+library(caret)
+# split <- createDataPartition(y=df$par_no, p = 0.75, list = FALSE)
+# %>% select(-c(par_no, pos, sex, age))
+# %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12, act))
+df$act <- as.factor(df$act)
+df_train <- df[1:11171,] %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12, act))
+df_test <- df[11172:15194,] %>% select(c(V02, V21, V22, V16, V20, V26, V18, V23, V19, V27, V14, V25, V28, V11, V24, V15, V09, V17, V13, V04, V08, V06, V10, V03, V59, V12, act))
+act_train <- df_train$act
+act_test <- df_test$act
+df_train <- df_train %>% select(-act)
+df_test <- df_test %>% select(-act)
+df_train_std <- preProcess(df_train, method = c("center", "scale")) %>% predict(df_train)
+df_test_std <- preProcess(df_test, method = c("center", "scale")) %>% predict(df_test)
+
+# resampling
+train_control <- trainControl(
+  method = "repeatedcv",
+  number = 5,
+  repeats = 5,
+  savePredictions = "final" # best prediction
+)
+set.seed(56)
+```
+
+进行训练集、测试集和交叉验证的基础设置。
+
+```{r Logistics}
+# Logistics Reg using caret package ----
+mdl_MLlog <- train(
+  act ~ ., # set formula
+  data = df_train,
+  method = 'glm',
+  family = 'binomial',
+  trControl = train_control
+)
+
+# Cross-validation ----
+pr_MLlog <- postResample(pred = predict(mdl_MLlog, newdata = df_test), obs = df_test$act)
+pr_MLlog
+```
+
+即便解决多重共线性（复合因子得分），Logistics依然不理想（请见分析管道）。逻辑回归方法采用下面的细分调整完成。另外可以考虑通过es挑选后的变量复合因子得分再进入Logistics，省得多重共线性报错。
+
+```{r Robust GAM}
+mdl_MLmda <- train(
+  act ~ ., # set formula
+  data = df_train,
+  method = 'gam',
+  trControl = train_control
+)
+# Cross-validation ----
+pr_MLmda <- postResample(pred = predict(mdl_MLmda, newdata = df_test), obs = df_test$act)
+pr_MLmda
+```
+
+这块是其他方法的试用。试过判别分析，袋装判别，GAM，稳健方法，均不太行。
+
+```{r random forest}
+mdl_MLranf <- train(
+  x = df_train,
+  y = df_train$act,
+  method = 'ranger',
+  # trControl = train_control
+)
+
+pr_MLranf <- postResample(pred = predict(mdl_MLranf, newdata = df_test), obs = df_test$act)
+pr_MLranf
+```
+
+随机森林在加入es高的变量后准确率逐步下降到比较正常的情况（96%）。
+
+```{r repeat value}
+repeated_value <- inner_join(df_train, df_test)
+```
+
+针对随机森林结果高的情况，查看重复变量，并没有重复。
+
+```{r parRF, eval=FALSE}
+mdl_MLranfpar <- train(
+  x = df_train,
+  y = df_train$act,
+  method = 'parRF',
+  trControl = train_control
+)
+
+pr_MLranfpar <- postResample(pred = predict(mdl_MLranfpar, newdata = df_test), obs = df_test$act)
+pr_MLranfpar
+```
+
+平行随机森林结果也降下来了，96%。同随机森林方法。
+
+```{r SVM redone}
+set.seed(56)
+mdl_MLSVM <- train(
+  act ~ .,
+  data = df_train_std,
+  method = 'svmLinear',
+  trControl = train_control,
+  preProcess = c("center","scale")
+)
+
+pr_MLSVM <- postResample(pred = predict(mdl_MLSVM, newdata = df_test_std), obs = df_test$act)
+pr_MLSVM
+```
+
+SVM百分56，效果一般（已经进行过标准化了）。
+
+```{r Logistics superpara-adjusted}
+# Logistics Reg using caret package ----
+mdl_MLlog <- train(
+  act ~ ., # set formula
+  data = df_regul_train,
+  method = 'glm',
+  family = 'binomial',
+  trControl = train_control
+)
+```
+```{r prediction}
+pr_MLlog <- predict(mdl_MLlog, newdata = df_regul_test)
+pr_MLlog <- data.frame(pr_MLlog)
+result <- ifelse((pr_MLlog > 0.55) | (pr_MLlog < 0.45), 1, 0)
+# result <- ifelse(pr_MLlog > 0.8, 1, 0)
+
+table(df_regul_test$act, result)
+accuracy_rate <- 1 - mean(result != df_regul_test$act)
+print(accuracy_rate)
+```
+
+由于混淆矩阵不是偏向的，因此这种方法也失败了。
+
+```{r random forest superpara-adjusted}
+set.seed(56)
+
+mdl_MLranf <- train(
+  x = df_train,
+  y = df_train$act,
+  method = 'ranger',
+  # min.node.size = 1,
+  # splitrule = "gini",
+  max.depth = sqrt(49),
+  trControl = train_control
+)
+
+pr_MLranf <- postResample(pred = predict(mdl_MLranf, newdata = df_regul_test), obs = df_regul_test$act)
+pr_MLranf
+```
+
+随机森林在加入es高的变量后准确率逐步下降到比较正常的情况（93%），等会计算一下其他的指标（召回率等）。需要预剪枝。
+
+```{r stress test function}
+stress_test <- function(df_test, model) {
+  ran_df <- df_test[sample(nrow(df_test), size = 750),]
+  pr_ML <- postResample(pred = predict(model, newdata = ran_df), obs = ran_df$act)
+  return(pr_ML)
+}
+
+time_start<-Sys.time()
+stress_test_result <- rep(stress_test(df_regul_test, mdl_MLranf), times = 100000)
+stress_test_result
+exc_time<-difftime(Sys.time(),time_start,units = 'mins')
+print(paste0('code执行时间：',round(exc_time,2),'mins'))
+```
+
+针对正常的随机森林，进行一些压力测试。压力测试结果还可以，0.1s。需要注意到的是，所有的任意抽样结果均会下降准确率，但效果还不错。
+
+```{r 2nd predict}
+library(arrow)
+raw_predict_2nd <- arrow::read_feather("E:\\SDODT Co., Ltd\\Sleep issues\\data\\openclose_selfmotivated\\variable_choose\\test_data_2.feather") %>% rename(par_no = "59", act = "60", pos = "61", "01" = "1", "02" = "2", "03" = "3", "04" = "4", "05" = "5", "06" = "6", "07" = "7", "08" = "8", "09" = "9", "00" = "0")
+raw_predict_2nd$act[raw_predict_2nd$act == 2] <- 0
+raw_predict_2nd$act[raw_predict_2nd$act == 3] <- 1
+raw_predict_2nd$par_no <- as.double(raw_predict_2nd$par_no)
+raw_predict_2nd$act <- as.factor(raw_predict_2nd$act)
+# 2睁眼，3闭眼
+raw_predict_2nd <- inner_join(raw_predict_2nd, p_info, by = 'par_no')
+raw_predict_2nd <- raw_predict_2nd %>% select(c("01", "20", "21", "15", "19", "25", "17", "22", "18", "26", "13", "24", "27", "10", "23", "14", "08", "16", "12", "03", "07", "05", "09", "02", "58", "11", act))
+raw_predict_2nd <- raw_predict_2nd %>% rename("V02" = "01", "V21" = "20", "V22" = "21", "V16" = "15", "V20" = "19", "V26" = "25", "V18" = "17", "V23" = "22", "V19" = "18", "V27" = "26", "V14" = "13", "V25" = "24", "V28" = "27", "V11" = "10", "V24" = "23", "V15" = "14", "V09" = "08", "V17" = "16", "V13" = "12", "V04" = "03", "V08" = "07", "V06" = "05", "V10" = "09", "V03" = "02", "V59" = "58", "V12" = "11")
+
+# head(raw_predict_2nd)
+```
+
+```{r 2nd predict P2}
+pr_MLranf2 <- postResample(pred = predict(mdl_MLranf, newdata = raw_predict_2nd), obs = raw_predict_2nd$act)
+pr_MLranf2
+```
+
+进行第二次测试，结果仍然可以
+
+```{r output data}
+write.csv(df_test, "./df_test.csv")
+write.csv(df_train, "./df_train.csv")
+```
+
+导出训练集和测试集的数据。
+
+```{r 2nd train by random forest package}
+library(randomForest)
+set.seed(56)
+mdl_MLranf2 <- randomForest::randomForest(
+  x = df_train,
+  y = act_train,
+  ntree= 500,     # n_estimators = 500,
+  mtry = 2,       # max_features = 2,
+  nodesize = 1,   # min_samples_leaf = 1,
+  max.depth = 7   # max_depth = 7,
+)
+
+pr_MLranf2 <- postResample(pred = predict(mdl_MLranf2, newdata = df_test), obs = act_test)
+pr_MLranf2
+
+# pr_MLranf3 <- postResample(pred = predict(mdl_MLranf2, newdata = raw_predict_2nd), obs = raw_predict_2nd$act)
+# pr_MLranf3
+```
+
+随机森林跑错了，以上全部作废，转移到新脚本中完成。

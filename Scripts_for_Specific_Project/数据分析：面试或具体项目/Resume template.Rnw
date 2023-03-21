@@ -1,0 +1,292 @@
+\documentclass{article}
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+%-------------------------
+% Resume in Latex
+% Author : Lavinia Qing Zhang
+% GitHub : https://github.com/QingZhang990806/Sample-CV.git
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+% only for pdflatex
+% \input{glyphtounicode}
+
+% fontawesome
+\usepackage{fontawesome5}
+
+% fixed width
+\usepackage[scale=0.90,lf]{FiraMono}
+
+% light-grey
+\definecolor{light-grey}{gray}{0.83}
+\definecolor{dark-grey}{gray}{0.3}
+\definecolor{text-grey}{gray}{.08}
+
+\DeclareRobustCommand{\ebseries}{\fontseries{eb}\selectfont}
+\DeclareTextFontCommand{\texteb}{\ebseries}
+
+% custom underilne
+\usepackage{contour}
+\usepackage[normalem]{ulem}
+\renewcommand{\ULdepth}{1.8pt}
+\contourlength{0.8pt}
+\newcommand{\myuline}[1]{%
+  \uline{\phantom{#1}}%
+  \llap{\contour{white}{#1}}%
+}
+
+
+% custom font: helvetica-style
+\usepackage{tgheros}
+\renewcommand*\familydefault{\sfdefault}
+%% Only if the base font of the document is to be sans serif
+\usepackage[T1]{fontenc}
+
+
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{0in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting - serif
+% \titleformat{\section}{
+%   \vspace{2pt} \scshape \raggedright\large % header section
+% }{}{0em}{}[\color{black} \titlerule \vspace{-5pt}]
+
+% TODO EBSERIES
+% sans serif sections
+\titleformat {\section}{
+    \bfseries \vspace{2pt} \raggedright \large % header section
+}{}{0em}{}[\color{light-grey} {\titlerule[2pt]} \vspace{-4pt}]
+
+% only for pdflatex
+% Ensure that generate pdf is machine readable/ATS parsable
+% \pdfgentounicode=1
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-1pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-1pt}\item
+    \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & {\color{dark-grey}\small #2}\vspace{1pt}\\ % top row of resume entry
+      \textit{#3} & {\color{dark-grey} \small #4}\\ % second row of resume entry
+    \end{tabular*}\vspace{-4pt}
+}
+
+\newcommand{\resumeSubSubheading}[2]{
+    \item
+    \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+      \textit{\small#1} & \textit{\small #2} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+      #1 & {\color{dark-grey}} \\
+    \end{tabular*}\vspace{-4pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+% CHANGED default leftmargin  0.15 in
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0pt}}
+
+\color{text-grey}
+
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{document}
+
+
+%----------HEADING----------
+\begin{center}
+    \textbf{\Huge Xi Chen} \\ \vspace{5pt}
+    \small \faPhone \text{+86 17717494771} \hspace{1pt} $|$
+    \hspace{1pt} \faEnvelope \hspace{2pt} \text{xi.chen.xmfls@hotmail.com}
+    \\
+    \hspace{1pt} \faMapMarker \hspace{2pt} \text{402 Jinhu Rd. 33, Huli District, Xiamen, China}
+    \\
+    \hspace{1pt} \faLinkedin
+    \hspace{2pt}\text{https://www.linkedin.com/in/xxxxxxxxxxxxxxxxx/}
+    \\ \vspace{-3pt}
+\end{center}
+
+%-----------PERSONAL PROFILE-----------
+\section{PROFILE}
+ \begin{itemize}[leftmargin=0in, label={}]
+    \small{\item{
+     A (proper adj.) Statistics graduate with Two First Class Bachelor degrees (with some detail description of yourself).
+     Currently studying MSc in Statistics at the University of St Andrews and seeking a data scientist graduate scheme.
+    }}
+ \end{itemize}
+
+%-----------EDUCATION-----------
+\section {EDUCATION}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {University of St Andrews}{Sep. 2021 -- Present}
+      {MSc in Statistics}{St Andrews, UK}
+      	\resumeItemListStart
+    	\resumeItem {\textbf{Relevant Modules}: Medical Statistics, Advanced Bayesian Inference, Applied Statistical Modelling using GLMs, Software for Data Analysis, Advanced Data Analysis, Knowledge Discovery and Datamining, Financial Mathematics}
+        \resumeItemListEnd
+        \resumeSubheading
+      {University of Plymouth}{Sep. 2020 -- Jul. 2021}
+      {BSc (Hons) in Mathematics and Statistics}{Plymouth, UK}
+      	\resumeItemListStart
+    	\resumeItem
+    	{\textbf{First Class Honours} Graduate in one-year exchanging programme to obtain a \textbf{Double Bachelor Degree}}
+    	\resumeItem
+    	{University of Plymouth \textbf{Scholarship} holder for \textbf{TOP 10\%} academic performance students}
+    	\resumeItem
+    	{Final Year Team Project and Presentation on "\textit{Predicting Responsive Repairs using Classification Methods}" (published in  \href{https://pearl.plymouth.ac.uk/handle/10026.1/12776}{\myuline {The Plymouth Student Scientist Journal}})}
+        \resumeItemListEnd
+        \resumeSubheading
+      {Yunnan University}{Sep. 2017 -- Jul. 2021}
+      {BSc in Statistics}{Kunming, China}
+      	\resumeItemListStart
+      	\resumeItem
+    	{GPA: 3.55/4.0 (equivalent to \textbf{First Class Honours})}
+    	\resumeItem
+    	{School Ranking: 14/204 (\textbf{6.86\%})}
+    	\resumeItem
+    	{Yunnan University \textbf{Scholarship} holder for \textbf{TOP 8\%} school ranking students for 4 consecutive years}
+    	\resumeItem
+    	{Dissertation on "\textit{Analysis of Stock Data Based on Association Rules}"}
+        \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+
+%-----------PROJECTS-----------
+\section {PROJECTS}
+  \resumeSubHeadingListStart
+      \resumeSubheading
+      {\textbf{Plymouth Community Homes (PCH) Statistics Research Project}} {Feb. 2021 -- May 2021}
+      {Final Year Team Project (University of Plymouth), Team Member}{UK}
+      \resumeItemListStart
+      \resumeItem{Conducted data visualisation and analysis from xxx,xxx data points using R, xxxx, \textbf{LR} model, \textbf{DT} model and \textbf{RF} model}
+      \resumeItem{Developed xxxxxxx skills using xxxxxxx and delivered presentations to non-experts}
+      \resumeItem{Experienced in xxxxxxxx report/project using \textbf{LaTeX}}
+      \resumeItemListEnd
+
+
+      \resumeSubheading
+      {\textbf{Spread of COVID-19 in UK and Germany}} {Oct. 2020 -- Dec. 2020}
+      {Case Study (University of Plymouth), Team Leader}{UK}
+      \resumeItemListStart
+      \resumeItem{Built a xxxxx model to estimate the spread in the UK and specific Bayesian models using \textbf{Markov Chain Monte Carlo (MCMC)} methods to compare the growth between the both countries (Germany performed better)}
+      \resumeItemListEnd
+
+      \resumeSubheading
+      {\textbf{COMAP's Interdisciplinary Contest in Modeling}} {Feb. 2020}
+      {Contest (Yunnan University), Team Leader}{USA}
+      \resumeItemListStart
+      \resumeItem{Researched the subject of "\textit{A Multivariate Nonlinear Regression Model for Environmental Carrying Capacity Based on TOPSIS Assessment System}" in R and SPSS to estimate the maximum amount of disposable plastic waste (271 MT)}
+      \resumeItem {\textbf{Results and Designations}: Honourable Mention (top 30\% of teams around the world)}
+      \resumeItemListEnd
+
+      \resumeSubheading
+      {\textbf{National Market Research and Analysis Competition}} {Oct. 2019 -- Aug. 2020}
+      {Contest (Yunnan University), Team Member}{China}
+      \resumeItemListStart
+      \resumeItem{Studied the subject of "\textit{A Social Investigation Based on Legal Education of College Students in China}" based on R, Python, Questionnaires, \textbf{FA} method, \textbf{RF} model}
+      \resumeItem {\textbf{Awards}: National Second Prize  (top 5.73\% of teams in China)}
+      \resumeItemListEnd
+
+
+    \resumeSubHeadingListEnd
+
+%-----------EXPERIENCE-----------
+\section{EXPERIENCE}
+  \resumeSubHeadingListStart
+  \resumeSubheading
+  {CETC Big Data Research Institute Co. LTD.}{Jan. 2020 -- Mar. 2020}
+  {Algorithm Engineer Intern}{China}
+  \resumeItemListStart
+  \resumeItem{Worked on the xxxx Team with 25 people; \textbf{received a return offer} for a full-time position}
+  \resumeItem{Built a xxxxxxx service in SQL Server to store xxxxxx}
+  \resumeItem{Wrote \textbf{xxxxx algorithms} for the product (xxxx Service Platform), contributing to approximately 15\% annual growth}
+  \resumeItemListEnd
+
+  \resumeSubheading
+      {xxxxxxx Technology Co. LTD}{Aug. 2019 -- Sep. 2019}
+      {Finance Intern}{China}
+      \resumeItemListStart
+        \resumeItem{Assisted in checking 132 technical service fee reports from xxxxxx for three months to ensure the amount was correct}
+        \resumeItem{Made xxxxx documents and prepared xxxxx reports, contributing to around 10\% annual cost saving}
+      \resumeItemListEnd
+
+    \resumeSubheading
+      {xxxxxxx Technology Co. LTD}{Jan. 2018 -- Mar. 2018}
+      {Finance Intern}{China}
+      \resumeItemListStart
+        \resumeItem{Data entry of xxxxxxxx into Excel spreadsheets}
+        \resumeItem{Compared the total revenue in 2017 and 2018 to set monthly target sales for each enterprise}
+    \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+
+%
+%-----------PROGRAMMING SKILLS-----------
+\section{SKILLS}
+ \begin{itemize}[leftmargin=0in, label={}]
+    \small{\item{
+     \textbf{Qualified Technical Mindset}{: Attained \textbf{Double First Class} degrees relevant to Statistics, developed with R, SAS, SPSS, Python, SQL Server, Matlab, Maple, and LaTeX}\vspace{2pt} \\
+     \textbf{Excellent Analytical Skills}{: Received Chinese National Market Research and Analysis Professional Skills Certificate}\vspace{2pt} \\
+     \textbf{3 Languages}{: English (proficient), Japanese (proficient) and Mandarin (native)}\vspace{2pt} \\
+     \textbf{Interests}{: Amateur video director (15 self-edited videos), and figure skating (national certificates)}
+    }}
+ \end{itemize}
+
+%---------Extracurricular Activities---------
+\section{Extracurricular Activities}
+ \begin{itemize}[leftmargin=0in, label={}]
+    \small{\item{
+     \textbf{Chairman of Students' Union} (Yunnan University, Jun. 2019 -- Jun. 2020){: Elected to lead students' union team of 130 representatives. Organised 12 significant team-building activities and 2 school evening parties, which included more than 5,000 students participating in total.}\vspace{2pt} \\
+     \textbf{Volunteer Teacher} (Yunnan University, Jun. 2018 – Aug. 2018){: Volunteered with Big Data Snail Voluntary Team of 20 members to provide fun math classes for 36 disadvantaged children throughout summer vacation}\vspace{2pt} \
+    }}
+ \end{itemize}
+
+
+%-------------------------------------------
+\end{document}

@@ -1,0 +1,290 @@
+---
+title: "0ZI5H"
+author: "Xi Chen"
+date: "2022/5/05"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+# None
+```
+## Forewords
+
+This is an R script/statistical report for conducting data analysis in the project Multi100.
+
+Claim: These characteristics [other crucial characteristics of the social environment within which leaders operate], which we derive from Neo-Institutional Theory (NIT) ... lead them [leaders] to prioritize concerns about their institutions’ legitimacy over the concerns about efficiency ... (p. 586.)
+
+Citation: 'Wilde, M. J., Geraty, K., Nelson, S. L., & Bowman, E. A. (2010). Religious economy or organizational field? Predicting bishops’ votes at the Second Vatican Council. American Sociological Review, 75(4), 586-606.', its DOI: 10.1177/0003122410368927.
+
+See https://osf.io/7snkz/ if you need more information about Multi100.
+
+## Package
+```{r Dependency, message=FALSE, error=FALSE, warning=FALSE}
+library(readxl)    # import
+library(tidyverse) # data preprocessing
+library(car)       # only for VIF and data preprocessing
+library(lmtest)    # re-calculate coefficient table
+library(sandwich)  # calculate robust standard error
+library(MASS)      # ordered/ordinal regression
+library(lme4)      # only for BIC
+```
+
+## Data pre-processing
+Considering my area of expertise is not sociology, the encoding of variables could be disputed by peers. However, I agreed with：  
+
+a) some calculation of the following variable from original paper:  
+**NPCCHANG** (**Field Stability**, Change in percent Catholic);  
+**NSTRUCTU** (**Structuration**)  
+
+b) the encoding of the following variable:  
+**IREVELA0** (**Vote on revelation** - progressive/conservative);  
+**IFRSTBV0** (**Vote on first BVM** - progressive/conservative);   
+
+I did not agree with the following variable and then tried to recode or explain them:  
+
+c) **NRELREG1** (I would consider it represent **'Monopolization'**; true value in NRELREG2 or NRELREG4 are representing false value of this variable)  
+d) **NINCUMBE** (it represent Field Stability in the original paper, but I consider it as another perspective of **'Monopolization'**)  
+
+I would also construct a variable:
+
+e) **NORGGRO1** (**organizational growth/efficacy situation**) by simply transforming change in percent Catholic into a binary variable (0: negative growth, 1: positive growth)  
+
+Due to the lack of relevant information, the pattern of missing data is assumed to be **MCAR**. Considering the sample size of this dataset is enough large to ensure the power and there is no a priori assumptions about the distribution of IVs, I would use *listwise deletion* instead of any imputation or pairwise deletion.  
+
+```{r pre-processing}
+df <- read_excel("H://I.R//Project：Multi100//data//Second Vatican Council Votes.xlsx")
+df <- df %>% mutate(NORGGRO1 = ifelse(df$NPCCHANG > 0, 1, 0))
+MulCol1 <- data.frame(df$IREVELA0, df$IFRSTBV0, df$NPERCATH, df$NORGGRO1, df$NRELREG1, df$NINCUMBE, df$NSTRUCTU, df$NPCCHANG)
+cor(MulCol1, use = 'na.or.complete') # Multicollinearity check
+options(scipen = 200)
+df <- rename(df, CaseID = 'CaseID$')
+```
+
+## RCT: more competition/willingness to grow, more reform
+### Logistic Regression of Sources of Revelation 
+
+```{r RCT1}
+ModelRCTREV1 <- glm(
+  IREVELA0 ~ NPERCATH + NORGGRO1 + NRELREG1 + NINCUMBE,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+vif(ModelRCTREV1) # Test multicollinearity
+Robstderr1 <- ModelRCTREV1 %>%  # calculate robust standard error for dealing with heteroscedasticity
+  coeftest(vcov. = ModelRCTREV1 %>%
+             vcovHC(type = 'HC1'))
+BICRCTREV1 <- BIC(Robstderr1) # In order to better explain the theory, only BIC was used to select model
+Robstderr1
+BICRCTREV1 # checking result
+
+ModelRCTREV2 <- glm(
+  IREVELA0 ~ NPERCATH + NORGGRO1 + NRELREG1 + NINCUMBE +
+             NPERCATH:NORGGRO1 + NPERCATH:NRELREG1 + NPERCATH:NINCUMBE +
+             NORGGRO1:NRELREG1 + NORGGRO1:NINCUMBE + NRELREG1:NINCUMBE,
+  data = df,
+  family = binomial,
+  na.action = na.omit) # testing interaction, all enter
+# Do not check VIF if we run interaction because it is meaningless
+Robstderr2 <- ModelRCTREV2 %>%
+  coeftest(vcov. = ModelRCTREV2 %>%
+             vcovHC(type = 'HC1')) 
+BICRCTREV2 <- BIC(ModelRCTREV2)
+Robstderr2
+BICRCTREV2
+exp(Robstderr2) # for checking odd ratio only
+```
+
+The above result shows objective binary growth, market share and one of my assumed monopoly variable 'Incumbency' are not significant in predicting bishops' revelation vote (potential reform or progressive behaviour in revelation issue) probability. However, the interaction gives/imply us the following information:  
+
+a) incumbency may be useful as a Z variable between IREVELA0 (bishops' revelation vote probability) and NRELREG1 (national religion);  
+
+b) market share may be only significant in predicting bishops' revelation vote probability when a country's religion is monopolized. The estimate might imply that less market share would significantly increase the bishops` revelation vote probability (reform tendency of bishops) when monopoly exists.  
+
+
+### Logistic Regression of Blessed Virgin Mary
+
+```{r RCT2}
+ModelRCTBLM1 <- glm(
+  IFRSTBV0 ~ NPERCATH + NORGGRO1 + NRELREG1 + NINCUMBE,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+vif(ModelRCTBLM1)
+Robstderr3 <- ModelRCTBLM1 %>%
+  coeftest(vcov. = ModelRCTBLM1 %>%
+             vcovHC(type = 'HC1'))
+BICRCTBLM1 <- BIC(Robstderr3)
+Robstderr3
+BICRCTBLM1
+
+ModelRCTBLM2 <- glm(
+  IFRSTBV0 ~ NPERCATH + NORGGRO1 + NRELREG1 + NINCUMBE +
+    NPERCATH:NORGGRO1 + NPERCATH:NRELREG1 + NPERCATH:NINCUMBE +
+    NORGGRO1:NRELREG1 + NORGGRO1:NINCUMBE + NRELREG1:NINCUMBE,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+Robstderr4 <- ModelRCTBLM2 %>%
+  coeftest(vcov. = ModelRCTBLM2 %>%
+             vcovHC(type = 'HC1'))
+BICRCTBLM2 <- BIC(Robstderr4)
+Robstderr4
+BICRCTBLM2
+exp(Robstderr4)
+```
+
+```{r RCT Some extra information needed}
+table(df$IREVELA0)
+table(df$IFRSTBV0) # output frequency
+```
+The above result gave some interesting evidence that:  
+
+c) market share, monopoly and organizational growth situation both significant in the simple model now;  
+
+d) when the interaction is entered, the simple effects changed slightly (but are still significant at the 0.1 level). If we consider such a simple effect is still noticeable, then the "monopoly X market share" and the "monopoly inside mechanism" are still useful in this model, as previous mention.  
+
+BIC shows model with interaction are better than the no-interaction.
+
+### Phased summary 1:  
+We proved that monopoly ("national religion" mainly, "incumbency" may as Z variable) and the interaction between market share and monopoly are a notable approach to progressive voting behaviour. Both RCT interaction models support that less market share would significantly increase the bishops` progressive vote probability when monopoly exists. This conclusion only partially proved RCT's basic causal mechanism, namely simply considering more competition/willingness to grow (less market share) would lead to more reform (voting behaviour). At least, national religion is an important variable that could not be ignored.
+
+According to the paper's literature review, protestants concern the Mary issue more than the Revelation issue. This prior assumption gave us information that they (bishops) would be more sensitive on progress to the Mary issues. Therefore, for the same bishop with same progressive trait, the positive vote possibility of the "Mary issue" would be higher than the "Revelation issue". This conclusion implies that there is a rank in the voting behaviour since "conservative/progressive" is a latent trait. And we would make a bold assumption that variable **IDV4CAT** (Voting pattern on first BVM and revelation - four category) is an ordinal manifest variable measuring the "conservative/progressive" trait.
+
+
+## NIT: more complicated  
+### Logistic Regression of Blessed Virgin Mary, NIT version  
+
+```{r NIT1}
+ModelNITBLM1 <- glm(
+  IFRSTBV0 ~ NPERCATH + NRELREG1 + NPCCHANG + NSTRUCTU + NPERCATH * NRELREG1,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+vif(ModelNITBLM1) # check only
+Robstderr5 <- ModelNITBLM1 %>%
+  coeftest(vcov. = ModelNITBLM1 %>%
+             vcovHC(type = 'HC1'))
+BICNITBLM1 <- BIC(Robstderr5)
+Robstderr5
+BICNITBLM1
+
+ModelNITBLM2 <- glm(
+  IFRSTBV0 ~ NPERCATH + NRELREG1 + NPCCHANG + NSTRUCTU + 
+    NPERCATH:NRELREG1 + NPERCATH:NPCCHANG + NPERCATH:NSTRUCTU + 
+    NRELREG1:NPCCHANG + NRELREG1:NSTRUCTU + NPCCHANG:NSTRUCTU, # limitation: NRELREG1:NSTRUCTU is removed from the model but I do not know how to deal with it.
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+Robstderr6 <- ModelNITBLM2 %>%
+  coeftest(vcov. = ModelNITBLM2 %>%
+             vcovHC(type = 'HC1'))
+BICNITBLM2 <- BIC(Robstderr6)
+Robstderr6
+ModelNITBLM2 # found interaction problem
+alias(ModelNITBLM2) # check interaction problem
+BICNITBLM2
+exp(Robstderr6)
+```
+
+### Logistic Regression of Sources of Revelation, NIT version  
+
+```{r NIT2}
+ModelNITREV1 <- glm(
+  IREVELA0 ~ NPERCATH + NRELREG1 + NPCCHANG + NSTRUCTU + NPERCATH * NRELREG1,
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+vif(ModelNITREV1) # check only
+Robstderr7 <- ModelNITREV1 %>%
+  coeftest(vcov. = ModelNITREV1 %>%
+             vcovHC(type = 'HC1'))
+BICNITREV1 <- BIC(Robstderr7)
+Robstderr7
+BICNITREV1
+
+ModelNITREV2 <- glm(
+  IREVELA0 ~ NPERCATH + NRELREG1 + NPCCHANG + NSTRUCTU + 
+    NPERCATH:NRELREG1 + NPERCATH:NPCCHANG + NPERCATH:NSTRUCTU + 
+    NRELREG1:NPCCHANG + NRELREG1:NSTRUCTU + NPCCHANG:NSTRUCTU, # limitation: NRELREG1:NSTRUCTU is removed from the model but I do not know how to deal with it.
+  data = df,
+  family = binomial,
+  na.action = na.omit)
+Robstderr8 <- ModelNITREV2 %>%
+  coeftest(vcov. = ModelNITREV2 %>%
+             vcovHC(type = 'HC1'))
+BICNITREV2 <- BIC(Robstderr8)
+Robstderr8
+ModelNITREV2 # found interaction problem
+alias(ModelNITREV2) # check interaction problem
+BICNITREV2
+exp(Robstderr8)
+```
+
+### Phased summary 2:
+
+There are some interesting findings:  
+
+- The coefficient of market share is now significant.
+- The Field Stability shows a decreasing estimate from BVM to REV of the NIT predicting model. I consider field stability may not be so important in the individual decision progress although its coefficient sometimes significant at a p<0.05 level. 
+- In contrast, Field Structuration shows a stable significant estimate in predicting individual's voting behaviour.
+- Considering the interactions between market share and structuration/monopoly are notable, it is worth doubting that instead of the national religion, market share would be better as a Z variable.  
+
+I would not report any regression coefficient direction change because it is not uncommon and it is meaningless to me. According to above summary, I would remove field stability and only put market share, national religion and structuration as predicting variable in the ordinal regression model.  
+There are still some limitations like I did not figure out the interaction issue (NA) between structuration and monopoly (national religion) due to my lack of experience, which I think it is not important (There is no multicollinearity, all variables are binary and theoretically non-overlapping).  
+
+## Ordered Regression of BVM and revelation
+
+We considered **IDV4CAT** is an ordinal manifest variable measuring the "conservative/progressive" trait. However, we need to reorder its encoding:
+
+```{r preprocessing}
+table(df$IDV4CAT)
+df <- df %>% mutate(IDV4CATre = c(1,3,2,4)[df$IDV4CAT + 1]) # Recode variable as a progressive trait, higher means more progressive
+table(df$IDV4CATre)
+```
+
+Then we created a simple (without interaction) ordinal regression model based on above assumption:
+
+```{r Ord Model}
+OrdModel1 <- polr(
+  as.factor(IDV4CAT) ~ NPERCATH + NRELREG1 + NSTRUCTU, # now only structuration is from NIT when monopoly/market share are from RCT
+  data = df,
+  Hess = TRUE,
+  na.action = na.omit)
+vif(OrdModel1)
+RobstderrOM <- OrdModel1 %>%
+  coeftest(vcov. = OrdModel1 %>%
+             vcovCL(cluster = df$CaseID, type = 'HC1'))
+OrdModel1
+RobstderrOM
+exp(RobstderrOM) # Check odd ratio
+Intercepts <- c(-1.36199263, -0.40361384, -0.06202674)
+exp(Intercepts) # Check intercept probability
+```
+
+## Conclusion
+
+We established several logistic regression models to explore whether RCT or NIT model is better. The result shows:
+
+- The hypothesis of RCT is too simple to explain the individual's voting behaviour;  
+- The variable from NIT enriches the interpretability of the model, although we only consider structuration is more important;  
+- Market share, as a classic variable from RCT, act more like a Z variable through both RCT and NIT approach;  
+- According to the result of ordered regression, bishops who live in a higher structuration country would significantly have a higher possibility (odd ratio: 2.5209) to progressive vote while their RCT variables significantly but less affect (national religion: 0.2039, market share: 0.9975). However, although we could claim that **PART OF** NIT characteristics prioritize bishops' *institutions' legitimacy* concerns over *efficiency* concern, the real relationship is more complicated than this simple claim, especially in interaction and variables' causal mechanisms. Moreover, structuration, market share and religion monopoly are far from enough as the manifest variables to confirm RCT and NIT.
+
+### Claim: Partly Proved.
+
+## Limitation
+
+a) I still question that structuration could not represent the core of NIT, same as market share/monopoly to RCT. This measuring and manifest variable selection issue actually cause the claim cannot be proved through this dataset.
+
+b) Data accumulation problem under limited sample:
+
+I do not have much more experience dealing with sociological/economic data. But during my analysis, I found that IVs selected by the author have a sample-related problem from my perspective in psychological science. Psychology often assumes that individuals (samples) are independent, and each individual variable should not be nested; If there is nesting, we will use different statistical methods; and this is related to your experimental treatment. In this dataset, the following situations have emerged: the variables such as stability, market share and structuration etc. of the same country are the same. In the actual analysis, this may cause some problems due to the bishop's nation sampling. For example, there are fewer samples (bishops) in some countries and more samples (bishops) in other countries. Although different countries may have the same stability, market share and structuration etc., I still can't convince myself that instead of a normal continuous variable, the choice of independent variables is more like a "categorical variable dependent on the country".  
+
+I tried to consult some of my colleagues, but they didn't give a good answer because of their different expertise. I also try to use multilevel linear models or control variables to solve this problem, but this violates the using situation of these two methods in my practical work experience. Therefore, I failed to deal with this problem until the end of the analysis.  
+
+The paper obviously failed to realize this problem. Although he used the robust standard error in his paper to claim to "adjust the impact of national-level on individual-level observation", it actually solves the problem of heteroscedasticity in regression. Heteroscedasticity is more like "the degree of difference of data, namely degree of dispersion", which is not "the complete equality of data under the same variable, that is, the excessive accumulation of data on a certain x value". In this case, the slope will greatly depend on the x value with more samples. Therefore, I believe that controlling heteroscedasticity only solved part of the problem, but cannot completely solve the impact of the "number of samples", especially when the data involves a wide range.  
+
+Please forgive me if there are any statistical biases/errors in the above questions; I am willing to communicate/listen/ask for an answer to this question.  

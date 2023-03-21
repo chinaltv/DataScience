@@ -1,0 +1,520 @@
+---
+title: "双向细目表分析报告 2022.08.23版本"
+author: Xi Chen
+date: 23 Aug 2022
+documentclass: ctexart
+output:
+  rticles::ctex:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+
+# 引言
+
+本文为使用RMarkdown+CTeX制作的报告。  
+本文为ASDA项目中，用于IEP推荐课程的数据计算初稿，具体评价方式使用双向细目表。具体数据可在SVN中查阅。  
+本期参与评分者为陈曦、赵佳欢、王新宇、雷页与张璐，均简单粗暴地认为是具有一定的经验的专家，因此适用德尔菲法。  
+
+# 评分者说明 2022.08.03  
+
+>请在进行打分以前详细阅读该说明。该表将用于评估不同任务项是否能对部分能力进行训练/干预，以及你预期中的训练/干预效果如何。在2022.08.03这个版本中，你需要评估该任务项以多大的程度影响到该能力。如果你认为能够起到干预效果，以效果大小进行0-10的评分。请明确以下几个注意点：
+
+>1. 干预/训练指的是该任务能够在执行多次、或经过适当计划制定后，在一定时间后能稳定、有效地提升该能力水平。请基于这一原则，对每个单元格进行填写；
+
+>2. 你需要填写三种分数：10代表你确定该任务可以完美地干预/训练该能力；0代表你确定该任务不能干预/训练该能力；中间的区分数字代表你认为这些能力能够以多大的程度影响到该能力。对于你不确定该任务能否干预/训练该能力的项，请填写999/NA。填写的理由自由，你可以活用你手头的信息来源以确定那些不确定的任务是否能够干预/训练该能力，但是尽量不要在某个格子上停留太久，本表格不为严格论证；你可以活用各种评估方式进行评分，例如先批量给你认为毫无相关的格子打上0；或是先使用0/1/999进行打分，随后再给1的格子标上自己认为的权重。
+
+>3. 在进行打分以前，你应该先看一遍每个能力对应的定义（见上）。请先确保你明白这些能力代表的是什么，以好进行后续的打分。如果你不同意该对应或觉得有问题，请写作文字以备注注明，并填写999以确保数据不会被污染。
+
+>请在进行打分以前确保你理解该说明，并尝试着进行预打分。如有任何不明确的地方，请咨询研究员。
+
+
+# 数据预处理
+
+```{r package and basic setting, message=FALSE, error=FALSE, warning=FALSE}
+library(readxl)      # 数据导入
+library(tidyverse)   # 数据预处理
+library(ggplot2)     # 可视化
+library(car)         # 对tidyverse包还不熟，简单用car包的recode
+library(matrixStats) # 一些基础处理包，例如
+library(psych)       # 因子分析
+library(plotly)      # 抄的源代码，用plotly作图好看点
+library(reshape2)    # 抄的源代码，一些工作用reshape2完成
+library(tibble)      # 只用了一些功能，例如rownames与column的互转
+library(NbClust)     # 玩玩k均值聚类
+#（没有解决的问题：到底用FA/PCA/Kmeans/层次？用Kmeans是因为有直接可借鉴的代码，
+# 另外对机器学习也有帮助
+library(cluster)     # pam() 围绕中心点的划分
+options(scipen = 20)
+```
+
+我在外面清理了打分矩阵，消除掉了一些打分的需求说明，并每个人的表格长度和格式尽量一致。如有需求可以观看原raw sheets和tidy sheets的其他部分。
+
+```{r import, message=FALSE}
+df_ly <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 ly tidy.xlsx")
+df_xc <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 x.c tidy.xlsx")
+df_wxy <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 wxy tidy.xlsx")
+df_zjh <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 zjh tidy.xlsx")
+df_zl <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 zl tidy 2022.08.22.xlsx")
+# 请用这个文件，有两个zl的文件在里面，第一个我也不知道怎么来的
+```
+
+观察评分者分数分布情况（此分布已综合各种异质性），重点观察均值、众数而非整个分布形态差异。定性决定是否存在打分者差异，通过个体的漂移drift/偏差bias情况决定。
+
+```{r exp:vis, error=FALSE, warning=FALSE}
+# 本来想检查数据框中是否有缺失值，想到好像不太需要，直接看向量个数即可
+# 创建向量（研究了我几个小时）去掉首列，清除名字，解包
+
+ly.vec <- df_ly[,-1] %>% unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10)
+wxy.vec <- df_wxy[-154,-1] %>% unname() %>% unlist() %>% as.numeric() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10) # 不知道为什么格式不是数字
+xc.vec <- df_xc[-154,-1] %>% unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10)
+zjh.vec <- df_zjh[-c(24,129),-1] %>% unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10)
+zl.vec <- df_zl[,-1] %>% unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10) %>% 
+  car::recode("50 = 0")
+# hist.ly <- hist(ly.vec)
+# hist.wxy <- hist(wxy.vec)
+# hist.xc <- hist(xc.vec)
+# hist.zjh <- hist(zjh.vec)
+# hist.zl <- hist(zl.vec)  # 弃用的作图
+ggplot() + # 直方图
+  aes(ly.vec) +
+  geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+  scale_x_continuous(lim = c(0,10))
+  geom_density()
+ggplot() +
+  aes(wxy.vec) +
+  geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+  scale_x_continuous(lim = c(0,10))
+ggplot() +
+  aes(xc.vec) +
+  geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+  scale_x_continuous(lim = c(0,10))
+ggplot() +
+  aes(zjh.vec) +
+  geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+  scale_x_continuous(lim = c(0,10))
+ggplot() +
+  aes(zl.vec) +
+  geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+  scale_x_continuous(lim = c(0,10))
+```
+
+观察评分者分数分布情况可得可能不存在打分漂移，而是由更广义的打分风格决定每个分布。理想情况下应使用模型（如多面Rasch模型）清除打分者差异，但由于样本量过小且这只是一个初步文件，大部分可由定性方式进行主观决策。因此，在第二轮预处理中，采用观察每个格子的标准差并作图的方式，继续进行EDA。
+
+```{r std, error=FALSE, warning=FALSE}
+ly.std <- df_ly[,-1] %>% unname() %>% unlist() %>% 
+  na_if(999)
+wxy.std <- df_wxy[-154,-1] %>% unname() %>% unlist() %>% as.numeric() %>% 
+  na_if(999)
+xc.std <- df_xc[-154,-1] %>% unname() %>% unlist() %>% 
+  na_if(999)
+zjh.std <- df_zjh[-c(24,129),-1] %>% unname() %>% unlist() %>% 
+  na_if(999)
+zl.std <- df_zl[,-1] %>% unname() %>% unlist() %>% 
+  na_if(999) %>% car::recode("50 = 0")
+# 转置矩阵并处理成数据框
+std_df <- t(data.frame(ly.std, wxy.std, xc.std, zjh.std, zl.std))
+std_vec <- std_df %>% 
+  colSds(na.rm = TRUE) %>% # 这里用的是matrixStats包
+  sort(decreasing = TRUE) %>% 
+  data.frame() %>% 
+  mutate(ID = 1:11618) %>%
+  rename(sd = ".") # 生成标准差向量并排序，做成新数据框
+ggplot(data = std_vec, aes(x = ID, y = sd, group = 1)) + 
+  geom_line()
+# 其他暂时没有用的函数，备忘
+# ggplot() + 
+#   aes(std_vec) +
+#   geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+#   scale_x_continuous(lim = c(0,10))
+```
+
+（中途发现函数用错了，回去重新改了下图）  
+根据图，并经过讨论和简单的模拟计算（可见datasheet），好像前后差异5就可以作为标准，不用标准差数据了。下面试一下（如果需要，可以以标准差2.5作为分割值）  
+
+```{r max-min_r1, error=FALSE, warning=FALSE}
+colMax <- function(data) # 抄一下别人的函数，以后学一下sapply
+  sapply(data, max, na.rm = TRUE)
+colMin <- function(data)
+  sapply(data, min, na.rm = TRUE)
+Max <- std_df %>% data.frame() %>% colMax() %>% as.vector()
+Min <- std_df %>% data.frame() %>% colMin() %>% as.vector()
+Diff <- Max - Min
+Diff <- Diff %>% 
+  sort(decreasing = TRUE) %>% 
+  data.frame() %>% 
+  mutate(ID = 1:11618) %>%
+  rename(Diff = ".") # 排序，做成新数据框
+ggplot(data = Diff, aes(x = ID, y = Diff, group = 1)) + 
+  geom_line()
+```
+
+经过统计，差值在5分以上的有4500个格子（笑死）。尝试寻找异质性来源（最大值最小值来源）。
+
+```{r max-min_r2, error=FALSE, warning=FALSE}
+# r不会搞，在excel里面做，请见.\data\2_way_specification_matrix\outlier check.xlsx和后续讨论文档
+# 该部分标注尚未完成，仅完成了结果查阅（发现雷页的打分趋势比较高）
+std_df %>% t() %>% as.data.frame() %>% write.csv("E:\\SDODT CO., Ltd\\ASD\\data\\2_way_specification_matrix\\outliers.csv")
+```
+
+# 平均分计算
+
+```{r output_table}
+# 重算均分，加入权重
+# W_Mean = fucntion(data) # 还是走到了自己写函数的这条不归路
+# 我错了，根本写不出来，下面是一些尝试
+# means <- data.frame(std_df)
+# test <- colSums(means * w)/colSums(w)
+# other.w <- vector("numeric", length = 11618) + 1
+# wxy.w <- other.w + 1
+# zjh.w <- other.w + 0.5
+# w <- t(data.frame(other.w, wxy.w, other.w, zjh.w, other.w))
+# means <- colSums(std_df * w)/colSums(w) # 计算权重均值
+# w2 <- c(1, 2, 1, 1.5, 1)
+# test <- weighted.mean(std_df, w2, na.rm = TRUE)
+
+
+# 耻辱地使用了excel函数完成了这一工作，我会回来的
+# 计算过程请见.\data\2_way_specification_matrix\weighted_mean.xlsx, source sheet
+weighted_mean <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/weighted_mean.xlsx")
+fig.means <- weighted_mean %>%
+  unlist() %>%
+  sort(decreasing = TRUE) %>%
+  data.frame() %>%
+  mutate(ID = 1:11618) %>%
+  rename(weighted_mean = ".") # 做有排序的新数据框
+means <- weighted_mean %>%
+  unlist() %>%
+  data.frame() %>%
+  mutate(ID = 1:11618) %>% 
+  rename(mean = ".") # 做无排序的新数据框
+ggplot(data = fig.means, aes(x = ID, y = weighted_mean, group = 1)) + 
+  geom_line()
+```
+
+剩余的工作应在excel表内完成……（已完成，请见outlier check.xlsx以及简化权重图）
+
+# 聚类、降维
+
+先降维（虽然大概率没用），方法采用因子分析。
+
+```{r Dimensionality reduction P0}
+weight_matrix <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/weighted_means_matrix.xlsx")
+weight_matrix <- weight_matrix %>% column_to_rownames(., var = '课程')
+```
+
+接着做一些虽然被诟病但是还是得做的经典测试（唉，为什么呢）。
+
+```{r kmo+bartlett}
+KMO(weight_matrix)
+bartlett.test(weight_matrix)
+```
+
+KMO是抽样充分性度量，经验标准是0.6以上就能做，0.7比较适合，0.8适合，本例中为0.76，还可以。Bartlett球形检验用于检查方差同质性，小于0.05说明在NHST框架下有很大的可能性拒绝H0。进一步推导说明数据适合做因子分析。
+
+```{r scree}
+scree(weight_matrix)
+fa_free <- fa(weight_matrix, fm = "pa", rotate = "varimax")
+fa <- fa(weight_matrix, fm = "pa", rotate = "varimax", nfactors = 9)
+scree.fa.9 <- scree(weight_matrix)[[1]][-c(13:74)]
+scree.pca.9 <- scree(weight_matrix)[[2]][-c(13:74)]
+x <- c(1:12)
+scree1 <- data.frame(x, scree.fa.9, scree.pca.9)
+```
+
+EFA得出大概可以降维为9个因子。
+
+```{r good look scree plot}
+hline <- function(y = 0, color = "black") {
+  list(type = "line",
+       x0 = 0,
+       x1 = 1,
+       xref = "paper",
+       y0 = y,
+       y1 = y,
+       line = list(color = color))
+  }
+fig <- plot_ly(scree1,
+               x = ~x,
+               y = ~scree.fa.9,
+               name = 'FA',
+               type = 'scatter',
+               mode = 'lines+markers') %>%
+  layout(
+    title ='Scree Plot',
+    font = list(size = 20),
+    margin = list(l=50, r=50, b=100, t=100, pad=4),
+    xaxis = list(title = 'Factor or component number'),
+    yaxis = list(title = 'Eigen values of factors and components'),
+    legend = list(title=list(text='<b> Methods </b>')),
+    shapes = list(hline(1))
+  )
+fig <- fig %>% add_trace(y = ~scree.pca.9, name = 'PC', mode = 'lines+markers')
+fig_2 <- style(fig, marker = list(size = 12))
+```
+
+```{r factor loadings}
+fa
+facorrs <- fa[["r"]]
+faloadings <- fa[["loadings"]]
+Lambda <- unclass(faloadings)
+p <- nrow(Lambda)
+factors <- ncol(Lambda)
+vx <- colSums(faloadings^2)
+varex <- rbind(`SS loadings` = vx)
+if (is.null(attr(faloadings, "covariance"))) {
+  varex <- rbind(varex, `Proportion Var` = vx/p)
+  if (factors > 1)
+    varex <- rbind(varex, `Cumulative Var` = cumsum(vx/p))
+}
+tibble::rownames_to_column(as.data.frame(varex), "faloadings")
+
+Lambda <- data.frame(Lambda) %>% mutate(ItemName = c(1:74))
+Lambda.m <- melt(Lambda, id="ItemName",
+                 measure=c("PA1", "PA2", "PA3", "PA4", "PA5", 
+                           "PA6", "PA7", "PA8", "PA9"),
+                 variable.name="Factor", value.name="Loading")
+ggplot(Lambda.m, aes(ItemName, abs(Loading), fill=Loading)) +
+  facet_wrap(~ Factor, nrow=1) +
+  geom_bar(stat="identity") +
+  coord_flip() +
+  scale_fill_gradient2(name = "Loading",
+                       high = "blue", mid = "white", low = "red",
+                       midpoint=0) +
+  ylab("Loading Strength") +
+  theme_bw(base_size=10)
+# 作图不方便，还是转到excel中供观看吧
+Lambda %>% 
+  as.data.frame() %>% 
+  rownames_to_column(., var = '课程') %>% 
+  write_excel_csv(
+    "E:\\SDODT CO., Ltd\\ASD\\data\\2_way_specification_matrix\\factor loadings.csv")
+```
+
+EFA结果见外。
+
+```{r cluster Kmeans P1}
+set.seed(1111) # 唉，为什么要设种子呢
+clust_number <- weight_matrix %>% 
+  scale() %>% 
+  NbClust(min.nc = 3, max.nc = 50, method = "kmeans")
+table(clust_number$Best.n[1,])
+barplot(table(clust_number$Best.n[1,]),
+        xlab = "Number of Clusters",
+        ylab = "Number of Cluster Chosen by multiple Criteria"
+)
+```
+
+```{r cluster Kmeans P2}
+set.seed(1111) # 硬是没懂
+fit.km <- weight_matrix %>% scale() %>% kmeans(50, nstart = 156)
+fit.km$size
+fit.km$centers
+# weight_matrix_type <- aggregate(
+#            weight_matrix, by = list(cluster = fit.km$cluster), mean)
+weight_matrix_type <- tibble(row.names(weight_matrix), fit.km$cluster)
+write_excel_csv(weight_matrix_type, "E:\\SDODT CO., Ltd\\ASD\\data\\2_way_specification_matrix\\course_kmeans_type.csv")
+```
+
+结果已导出，人工制定分为几类可能存在一些困难。后续等待手动分层以后再相应改centers数量。下面本来想尝试一些其他方法的聚类，后面放弃。
+
+```{r cluster pam/hierarchical}
+# pam怎么还是要设置中心个数，告辞
+# set.seed(1112)
+# fit.pam <- pam(weight_matrix, k = ..., stand = TRUE)
+# weight_matrix_type2 <- 
+
+# 分层还是爬吧
+# 基础stats包就能做
+# set.seed(1113)
+# clust_number_average <- weight_matrix %>% 
+#   scale() %>% 
+#   NbClust(distance = "euclidean", min.nc = 3, max.nc = 70, method = "average")
+# table(clust_number_average$Best.nc[1,])
+# barplot(table(clust_number_average$Best.n[1,]),
+#         xlab = "Number of Clusters",
+#         ylab = "Number of Cluster Chosen by multiple Criteria"
+# )
+# 
+# 
+# d_hier <- weight_matrix %>% scale() %>% dist()
+# fit.average <- hclust(d_hier, method = "average")
+# plot(fit.average, hang = -1, cex = .8, main = "Average Linkage Clustering")
+# cutree <- cutree(fit.average, k = 70)
+# table(cutree)
+# fig.average2 <- as.dendrogram(fig.average)
+# dev.new()
+# pdf("E:/SDODT Co., Ltd/ASD/images/hi-cluster.pdf", width = 40, height = 15)
+# fit.average %>% plot(cex = 0.1, main = "ALC/n70 Cluster Solution")
+# graphics.off()
+# rect.hclust(fit.average, k = 70)
+
+# pca和efa不做了
+```
+
+
+# 重新分析
+
+本部分是去除雷页数据以后进行的四人分析，权重不变。
+
+```{r reanalysis P1 descriptive}
+# re-import
+df_xc <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 x.c tidy.xlsx")
+df_wxy <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 wxy tidy.xlsx")
+df_zjh <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 zjh tidy.xlsx")
+df_zl <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/tidy/双向细目表 zl tidy 2022.08.22.xlsx")
+
+# basic vector create (是不是好像没用)
+wxy.vec <- df_wxy[-154,-1] %>% 
+  unname() %>% unlist() %>% as.numeric() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10)
+xc.vec <- df_xc[-154,-1] %>% 
+  unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10)
+zjh.vec <- df_zjh[-c(24,129),-1] %>% 
+  unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10)
+zl.vec <- df_zl[,-1] %>% 
+  unname() %>% unlist() %>% 
+  na_if(999) %>% na_if(0) %>% na_if(10) %>% car::recode("50 = 0")
+wxy.std <- df_wxy[-154,-1] %>% 
+  unname() %>% unlist() %>% as.numeric() %>% 
+  na_if(999)
+xc.std <- df_xc[-154,-1] %>% unname() %>% unlist() %>% 
+  na_if(999)
+zjh.std <- df_zjh[-c(24,129),-1] %>% unname() %>% unlist() %>% 
+  na_if(999)
+zl.std <- df_zl[,-1] %>% unname() %>% unlist() %>% 
+  na_if(999) %>% car::recode("50 = 0")
+# 转置矩阵并处理成数据框
+std_df_re <- t(data.frame(wxy.std, xc.std, zjh.std, zl.std))
+std_vec_re <- std_df_re %>% 
+  colSds(na.rm = TRUE) %>% # 这里用的是matrixStats包
+  sort(decreasing = TRUE) %>% 
+  data.frame() %>% 
+  mutate(ID = 1:11618) %>%
+  rename(sd = ".") # 生成标准差向量并排序，做成新数据框
+
+
+# calculate diff cells number（其实excel已经做过了）
+colMax <- function(data) # 预防起见，还是再创建一次函数吧
+  sapply(data, max, na.rm = TRUE)
+colMin <- function(data)
+  sapply(data, min, na.rm = TRUE)
+Max <- std_df_re %>% data.frame() %>% colMax() %>% as.vector()
+Min <- std_df_re %>% data.frame() %>% colMin() %>% as.vector()
+Diff_re <- Max - Min
+Diff_re <- Diff_re %>% 
+  sort(decreasing = TRUE) %>% 
+  data.frame() %>% 
+  mutate(ID = 1:11618) %>%
+  rename(Diff = ".") # 排序，做成新数据框
+ggplot(data = Diff_re, aes(x = ID, y = Diff, group = 1)) + 
+  geom_line()
+```
+
+差值大于5（包含5）的仍有大约两千个，和excel统计结果一致。
+
+```{r reanalysis P2 descriptive}
+# 复用原outlier check.xlsx完成该任务
+# 权重计算
+# 计算过程请见.\data\2_way_specification_matrix\weighted_mean.xlsx
+# 中的recalculate sheet
+weighted_mean2 <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/weighted_mean.xlsx", 
+                             sheet = "outcome_re", 
+                             range = "A1:A11619")
+fig.means2 <- weighted_mean2 %>%
+  unlist() %>%
+  sort(decreasing = TRUE) %>%
+  data.frame() %>%
+  mutate(ID = 1:11618) %>%
+  rename(weighted_mean = ".") # 做有排序的新数据框
+means2 <- weighted_mean2 %>%
+  unlist() %>%
+  data.frame() %>%
+  mutate(ID = 1:11618) %>% 
+  rename(mean = ".") # 做无排序的新数据框
+ggplot(data = fig.means2, aes(x = ID, y = weighted_mean, group = 1)) + 
+  geom_line()
+```
+
+```{r reanalysis P3 efa}
+weight_matrix2 <- read_excel("E:/SDODT Co., Ltd/ASD/data/2_way_specification_matrix/weighted_means_matrix.xlsx", 
+                             sheet = "final2")
+weight_matrix2 <- weight_matrix2 %>% column_to_rownames(., var = '课程')
+KMO(weight_matrix2)
+bartlett.test(weight_matrix2)
+scree(weight_matrix2)
+fa_free2 <- fa(weight_matrix2, fm = "pa", rotate = "varimax")
+fa2 <- fa(weight_matrix2, fm = "pa", rotate = "varimax", nfactors = 9)
+scree2.fa.9 <- scree(weight_matrix2)[[1]][-c(13:74)]
+scree2.pca.9 <- scree(weight_matrix2)[[2]][-c(13:74)]
+x <- c(1:12)
+scree2 <- data.frame(x, scree2.fa.9, scree2.pca.9)
+hline <- function(y = 0, color = "black") {
+  list(type = "line",
+       x0 = 0,
+       x1 = 1,
+       xref = "paper",
+       y0 = y,
+       y1 = y,
+       line = list(color = color))
+  }
+fig2 <- plot_ly(scree2,
+               x = ~x,
+               y = ~scree2.fa.9,
+               name = 'FA',
+               type = 'scatter',
+               mode = 'lines+markers') %>%
+  layout(
+    title ='Scree Plot',
+    font = list(size = 20),
+    margin = list(l=50, r=50, b=100, t=100, pad=4),
+    xaxis = list(title = 'Factor or component number'),
+    yaxis = list(title = 'Eigen values of factors and components'),
+    legend = list(title=list(text='<b> Methods </b>')),
+    shapes = list(hline(1))
+  )
+fig2 <- fig2 %>% add_trace(y = ~scree2.pca.9, name = 'PC', mode = 'lines+markers')
+fig_22 <- style(fig, marker = list(size = 12))
+fa2
+facorrs2 <- fa2[["r"]]
+faloadings2 <- fa2[["loadings"]]
+Lambda2 <- unclass(faloadings2)
+p2 <- nrow(Lambda2)
+factors2 <- ncol(Lambda2)
+vx2 <- colSums(faloadings2^2)
+varex2 <- rbind(`SS loadings` = vx2)
+if (is.null(attr(faloadings2, "covariance"))) {
+  varex <- rbind(varex2, `Proportion Var` = vx/p)
+  if (factors > 1)
+    varex2 <- rbind(varex2, `Cumulative Var` = cumsum(vx/p))
+}
+tibble::rownames_to_column(as.data.frame(varex), "faloadings2")
+
+Lambda2 <- data.frame(Lambda2) %>% mutate(ItemName = c(1:74))
+Lambda.m2 <- melt(Lambda2, id="ItemName",
+                 measure=c("PA1", "PA2", "PA3", "PA4", "PA5", 
+                           "PA6", "PA7", "PA8", "PA9"),
+                 variable.name="Factor", value.name="Loading")
+ggplot(Lambda.m2, aes(ItemName, abs(Loading), fill=Loading)) +
+  facet_wrap(~ Factor, nrow=1) +
+  geom_bar(stat="identity") +
+  coord_flip() +
+  scale_fill_gradient2(name = "Loading",
+                       high = "blue", mid = "white", low = "red",
+                       midpoint=0) +
+  ylab("Loading Strength") +
+  theme_bw(base_size=10)
+# 作图不方便，还是转到excel中供观看吧
+Lambda2 %>% 
+  as.data.frame() %>% 
+  rownames_to_column(., var = '课程') %>% 
+  write_excel_csv(
+    "E:\\SDODT CO., Ltd\\ASD\\data\\2_way_specification_matrix\\factor loadings2.csv")
+```
