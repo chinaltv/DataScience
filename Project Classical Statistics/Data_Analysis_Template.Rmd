@@ -1,0 +1,91 @@
+---
+title: "Data_Analysis_Template"
+author: "Xi Chen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# clear and basic setting----
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '...')
+options(scipen = 2000)
+options()
+
+# set work directory
+import_path <- './'
+export_path <- './'
+
+
+# package installation ----
+packages = c("arrow", "openxlsx", "tidyverse", "skimr", "jtools", "broom", "ggplot2", "plotly", "report", "reticulate")
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())), 
+                   repos = "https://mirrors.tuna.tsinghua.edu.cn/CRAN/")
+}
+invisible(lapply(packages, library, character.only = TRUE))
+```
+
+```{r library}
+library(arrow)      # data import. R/python workflow transfer
+library(openxlsx)   # data import and export.
+library(tidyverse)  # data wrangling
+library(skimr)      # report variables' type
+library(jtools)     # model summary
+library(broom)      # model summary
+library(ggplot2)    # data visualization
+library(plotly)     # data visualization
+library(report)     # result report
+library(reticulate) # python for r
+```
+
+
+```{r Data Import}
+setwd(import_path)
+df <- openxlsx::read.xlsx(data, "./")
+```
+
+```{r Data Preprocessing}
+index <- rep(c(1,2,3,4,5), each = 100) # create index vector
+str(df)                                # report variables' types
+skimr::skim(df)                        # offer another way to report variables' types
+```
+
+```{r Missing Value Processing}
+df[!(df$Gender %in% "Male"),]          # remove some lines in a condition
+```
+
+```{r EDA}
+cat("string", variable)                # multiple report
+```
+
+```{r CDA}
+summary(model)                         # basic report
+jtools::summ()                         # a tidy way to report model statistics, offering Adj. R².
+broom::tidy()                          # another tidy way to report model statistics. See below
+```
+
+```{r Loop Regression}
+library(tidyverse)
+library(broom)
+list_models <- lapply(split(df, df$Key), function(x) lm(y1 ~ x1 + x2, data = x))
+as_tibble(do.call(rbind, lapply(list_models, broom::tidy)))
+```
+
+```{r Visualization}
+library(ggplot2)
+library(plotly)
+```
+
+```{r Data Export}
+library(arrow)
+library(openxlsx)
+setwd(export_path)
+openxlsx::write.xlsx(data, "./")
+openxlsx
+```
+
+
+
+
