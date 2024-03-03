@@ -46,6 +46,19 @@ setwd(import_path)
 df <- openxlsx::read.xlsx(data, "./")
 ```
 
+```{Python Data Preprocessing}
+import os
+import numpy as np
+import pandas as pd
+import Pingouin as pg
+import sklearn
+import statsmodels
+import matplotlib.pyplot as plt
+import plotly.express as px
+
+
+```
+
 ```{r Data Preprocessing}
 index <- rep(c(1,2,3,4,5), each = 100) # create index vector
 str(df)                                # report variables' types

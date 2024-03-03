@@ -2,6 +2,12 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../Project：Neuroscience Ref"
+		},
+		{
+			"path": "../Academic_Data_Analysis"
 		}
 	],
 	"settings": {}
